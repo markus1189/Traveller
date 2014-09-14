@@ -3,10 +3,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 module Main where
 
 import           Control.Applicative (Applicative, pure, (*>), (<$>), (<*>))
-import           Control.Lens (Traversal', ix, preview, traverse, view)
+import           Control.Lens (Index, IxValue, Ixed, ix, preview, traverse, view)
 import           Control.Lens.Operators
 import           Control.Lens.TH
 import           Control.Monad.Random (MonadRandom, getRandomRs)
@@ -38,6 +39,12 @@ elementToText Empty = " "
 newtype Level = Level { unLevel :: [[Element]] }
 makeLenses ''Level
 makePrisms ''Level
+
+
+type instance Index Level = (Width,Height)
+type instance IxValue Level = Element
+instance Ixed Level where
+  ix (Width w,Height h) = _Level . ix h . ix w
 
 dimensions :: Level -> (Width,Height)
 dimensions (Level cs) = (width,height)
@@ -113,10 +120,10 @@ movePlayer :: Direction -> GameState -> GameState
 movePlayer dir gs =
   if gs ^. moves > 0 && inBounds newHeroPosition (view level gs)
      then gs &~ do
-       level . at heroPosition .= Empty
+       level . ix heroPosition .= Empty
        heroPos .= newHeroPosition
        score %= tryPickup (gs ^. level) newHeroPosition
-       level . at newHeroPosition .= Hero
+       level . ix newHeroPosition .= Hero
        moves -= 1
      else gs
   where inBounds (x,y) (dimensions -> (lx,ly)) =
@@ -125,7 +132,7 @@ movePlayer dir gs =
         newHeroPosition = adjust dir heroPosition
 
 tryPickup :: Level -> (Width, Height) -> Int -> Int
-tryPickup lvl p = if preview (at p) lvl == Just Gold then (+1) else id
+tryPickup lvl p = if preview (ix p) lvl == Just Gold then (+1) else id
 
 emptyLevel :: Width -> Height -> Level
 emptyLevel w h = Level . genericTake w . fmap (genericTake h) $ repeat . repeat $ Empty
@@ -140,16 +147,13 @@ initialGameState :: (Applicative m, MonadRandom m) => m GameState
 initialGameState = do
   lvl <- generateLevel 20 20
   hPos <- fromMaybe (error "Could not playe Hero.") <$> findHeroPos lvl
-  return $ GameState (lvl & at hPos .~ Hero) 100 0 hPos
+  return $ GameState (lvl & ix hPos .~ Hero) 100 0 hPos
 
 randomPositions :: (MonadRandom f, Applicative f) => Width -> Height -> f [(Width, Height)]
 randomPositions w h = zip <$> getRandomRs (0,w-1) <*> getRandomRs (0,h-1)
 
 setGold :: Level -> (Width,Height) -> Level
-setGold l wh = l & at wh .~ Gold
-
-at :: (Width, Height) -> Traversal' Level Element
-at (Width w, Height h) = _Level . ix h . ix w
+setGold l wh = l & ix wh .~ Gold
 
 pickDistinct :: Ord a => Int -> [a] -> [a]
 pickDistinct num = go num Set.empty
@@ -163,4 +167,4 @@ pickDistinct num = go num Set.empty
 findHeroPos :: (Applicative m, MonadRandom m) => Level -> m (Maybe (Width,Height))
 findHeroPos l = do
   positions <- uncurry randomPositions $ dimensions l
-  return $ find (\p -> preview (at p) l == Just Empty) positions
+  return $ find (\p -> preview (ix p) l == Just Empty) positions
