@@ -4,7 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
-module Main where
+module Main (main) where
 
 import           Control.Applicative (Applicative, pure, (*>), (<$>), (<*>))
 import           Control.Lens (Index, IxValue, Ixed, ix, preview, traverse, view)
@@ -39,7 +39,6 @@ elementToText Empty = " "
 newtype Level = Level { unLevel :: [[Element]] }
 makeLenses ''Level
 makePrisms ''Level
-
 
 type instance Index Level = (Width,Height)
 type instance IxValue Level = Element
@@ -90,10 +89,10 @@ main = do initGs <- initialGameState
           fg `onKeyPressed` \_ key _ ->
              case key of
                KASCII 'q' -> voidBool shutdownUi
-               KASCII 'h' -> voidBool . modifyGameState scores rlvl gs $ movePlayer LEFT
-               KASCII 'j' -> voidBool . modifyGameState scores rlvl gs $ movePlayer DOWN
-               KASCII 'k' -> voidBool . modifyGameState scores rlvl gs $ movePlayer UP
-               KASCII 'l' -> voidBool . modifyGameState scores rlvl gs $ movePlayer RIGHT
+               KASCII 'h' -> voidBool . modifyGameState scores rlvl gs $ moveHero LEFT
+               KASCII 'j' -> voidBool . modifyGameState scores rlvl gs $ moveHero DOWN
+               KASCII 'k' -> voidBool . modifyGameState scores rlvl gs $ moveHero UP
+               KASCII 'l' -> voidBool . modifyGameState scores rlvl gs $ moveHero RIGHT
                _ -> return False
           c <- newCollection
           void $ addToCollection c ui fg
@@ -116,8 +115,8 @@ adjust d (x,y) = case d of
                    UP -> (x,y-1)
                    RIGHT -> (x+1,y)
 
-movePlayer :: Direction -> GameState -> GameState
-movePlayer dir gs =
+moveHero :: Direction -> GameState -> GameState
+moveHero dir gs =
   if gs ^. moves > 0 && inBounds newHeroPosition (view level gs)
      then gs &~ do
        level . ix heroPosition .= Empty
@@ -146,7 +145,7 @@ generateLevel w h = do
 initialGameState :: (Applicative m, MonadRandom m) => m GameState
 initialGameState = do
   lvl <- generateLevel 20 20
-  hPos <- fromMaybe (error "Could not playe Hero.") <$> findHeroPos lvl
+  hPos <- fromMaybe (error "Could not place Hero.") <$> findHeroPos lvl
   return $ GameState (lvl & ix hPos .~ Hero) 100 0 hPos
 
 randomPositions :: (MonadRandom f, Applicative f) => Width -> Height -> f [(Width, Height)]
